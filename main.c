@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,6 +11,7 @@ int myrank;
 
 void master();
 void slave();
+void my_log(char *fmt, ...);
 
 void main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
@@ -37,30 +39,30 @@ void master() {
 
   MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 
-  printf("Seeding slaves\n");
+  my_log("Seeding slaves");
   for (rank = 1; rank < ntasks; ++rank) {
     int *current_task = work + (rank - 1);
     MPI_Send(current_task, 1, MPI_INT, rank, MS_WORK_TAG, MPI_COMM_WORLD);
   }
 
-  printf("Sending remaining jobs\n");
+  my_log("Sending remaining jobs");
   for (i = ntasks-1; i < njobs; i++) {
     MPI_Recv(&result, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    printf("Received %d from %d\n", result, status.MPI_SOURCE);
+    my_log("Received %d from %d", result, status.MPI_SOURCE);
 
     int *next_job = work + i;
-    printf("Sending %d to %d\n", *next_job, status.MPI_SOURCE);
+    my_log("Sending %d to %d", *next_job, status.MPI_SOURCE);
     MPI_Send(next_job, 1, MPI_INT, status.MPI_SOURCE, MS_WORK_TAG, MPI_COMM_WORLD);
   }
 
-  printf("Done sending jobs, waiting to be completed\n");
+  my_log("Done sending jobs, waiting to be completed");
 
   for (rank = 1; rank < ntasks; ++rank) {
     MPI_Recv(&result, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    printf("Received %d from %d\n", result, status.MPI_SOURCE);
+    my_log("Received %d from %d", result, status.MPI_SOURCE);
   }
 
-  printf("Killing slaves\n");
+  my_log("Killing slaves");
   for (rank = 1; rank < ntasks; ++rank) {
     MPI_Send(0, 0, MPI_INT, rank, MS_DIE_TAG, MPI_COMM_WORLD);
   }
@@ -75,12 +77,24 @@ void slave() {
   for (;;) {
     MPI_Recv(&work, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == MS_DIE_TAG) {
-      printf("Exiting from %d\n", myrank);
+      my_log("Exiting");
       return;
     }
-    printf("[%d] Processing %d...\n", myrank, work);
+    my_log("Processing %d...", work);
     sleep(rand() % 2);
     result = work * 10 * myrank;
     MPI_Send(&result, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
   }
+}
+
+
+void my_log(char *fmt, ...) {
+  va_list printfargs;
+  printf("[%d] ", myrank);
+
+  va_start(printfargs, fmt);
+  vprintf(fmt, printfargs);
+  va_end(printfargs);
+
+  printf("\n");
 }
