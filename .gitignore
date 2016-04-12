@@ -30,3 +30,5 @@
 
 # Debug files
 *.dSYM/
+
+mpi_master_slave
