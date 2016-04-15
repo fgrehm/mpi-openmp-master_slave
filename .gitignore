@@ -31,4 +31,5 @@
 # Debug files
 *.dSYM/
 
-bin/*
+mpi_master_slave
+single_process

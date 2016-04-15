@@ -1,43 +1,62 @@
 #include <stdio.h>
 #include <stdlib.h>
-// #include <limits.h>
 
-#define TOTAL_ARRAYS 1000
-#define TOTAL_NUMBERS 100000
+#define TOTAL_ARRAYS  1000
+#define TOTAL_NUMBERS 1000000
+#define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
+#define T_NUMBERS     int
 
-int i, n;
-unsigned long int** numbers;
+T_NUMBERS i, n;
 int cmpfunc (const void * a, const void * b);
+void debug_all_numbers(T_NUMBERS **numbers);
+void debug_numbers(T_NUMBERS* numbers);
 
 int main() {
-  numbers = calloc(TOTAL_ARRAYS, sizeof(unsigned long int *));
-  if (numbers == NULL) {
-    fprintf(stderr, "calloc failed\n");
-    return(-1);
-  }
-
-  printf("Preparing arrays...");
+  T_NUMBERS **numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBERS *));
+  printf("Preparing arrays...\n");
   for (i = 0; i < TOTAL_ARRAYS; i++) {
-    numbers[i] = calloc(TOTAL_NUMBERS, sizeof(unsigned long int));
-    if (numbers[i] == NULL) {
-      fprintf(stderr, "calloc failed\n");
-      return(-1);
-    }
-
-    for (n = TOTAL_NUMBERS; n > 0; n--) {
-      numbers[i][TOTAL_NUMBERS-n-1] = n;
-    }
+    if (i % 100 == 0) printf("Processed %d\n", i);
+    numbers[i] = (T_NUMBERS *)calloc(TOTAL_NUMBERS, sizeof(T_NUMBERS));
+    for (n = TOTAL_NUMBERS-1; n >= 0; n--)
+      numbers[i][n] = MAX_NUMBER - i * TOTAL_NUMBERS - n;
   }
   printf("DONE\n");
+
+  debug_all_numbers(numbers);
 
   printf("Sorting arrays...\n");
   for (i = 0; i < TOTAL_ARRAYS; i++) {
     if (i % 100 == 0) printf("Processed %d\n", i);
-    qsort(numbers[i], TOTAL_NUMBERS, sizeof(unsigned long int), cmpfunc);
+    qsort(numbers[i], TOTAL_NUMBERS, sizeof(T_NUMBERS), cmpfunc);
   }
   printf("Done sorting\n");
+
+  debug_all_numbers(numbers);
+}
+
+void debug_all_numbers(T_NUMBERS **numbers) {
+  printf("First 5 arrays:\n");
+  for (i = 0; i < 5; i++) {
+    debug_numbers(numbers[i]);
+  }
+  printf(" ...\n");
+  for (i = TOTAL_ARRAYS - 5; i < TOTAL_ARRAYS; i++) {
+    debug_numbers(numbers[i]);
+  }
+}
+
+void debug_numbers(T_NUMBERS* numbers) {
+  printf("  [ ");
+  for (n = 0; n < 3; n++) {
+    printf("%07d ", numbers[n]);
+  }
+  printf(" ... ");
+  for (n = TOTAL_NUMBERS - 3; n < TOTAL_NUMBERS; n++) {
+    printf("%07d ", numbers[n]);
+  }
+  printf("]\n");
 }
 
 int cmpfunc (const void * a, const void * b) {
-  return ( *(unsigned long int*)a - *(unsigned long int*)b );
+  return ( *(T_NUMBERS*)a - *(T_NUMBERS*)b );
 }
