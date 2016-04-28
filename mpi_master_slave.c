@@ -5,21 +5,28 @@
 #include "mpi.h"
 
 #define MASTER 0
-#define TAG_JOB_INDEX     1
+#define TAG_JOB_INDEX      1
 #define TAG_JOB_PAYLOAD    2
 #define TAG_RESULT_INDEX   3
 #define TAG_RESULT_PAYLOAD 4
 #define TAG_DIE            5
 
+#define TOTAL_ARRAYS  1000
+#define TOTAL_NUMBERS 100000
+
+#define T_NUMBER unsigned long int
+
 int myrank;
 
 void master();
 void slave();
-void master_send_job(int dest, int arr_index);
+void master_send_job(int dest, int num_index);
 int master_receive_result();
 void slave_receive_job();
 void slave_send_result();
 void my_log(char *fmt, ...);
+
+int cmpfunc (const void * a, const void * b);
 
 void main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
@@ -34,14 +41,27 @@ void main(int argc, char **argv) {
 }
 
 void master() {
+  T_NUMBER** numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBER *));
+  if (numbers == NULL) {
+    fprintf(stderr, "calloc failed\n");
+    return(-1);
+  }
+
+  printf("Preparing arrays...");
+  for (i = 0; i < TOTAL_ARRAYS; i++) {
+    numbers[i] = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
+    if (numbers[i] == NULL) {
+      fprintf(stderr, "calloc failed\n");
+      return(-1);
+    }
+
+    for (n = TOTAL_NUMBERS; n > 0; n--)
+      numbers[i][TOTAL_NUMBERS-n-1] = n;
+  }
+  printf("DONE\n");
+
   int        ntasks, rank, njobs, i;
   int*       work;
-
-  njobs = 100;
-  work = (int*)calloc(njobs, sizeof(int));
-  for (i = 0; i < njobs; i++) {
-    work[i] = i;
-  }
 
   MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 
@@ -67,13 +87,10 @@ void master() {
   }
 }
 
-void master_send_job(int dest, int arr_index) {
-  int payload = arr_index * 10;
-
-  my_log("Sending job %d to %d", arr_index, dest);
-  MPI_Send(&arr_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
-  my_log("Sending %d to %d", payload, dest);
-  MPI_Send(&payload, 1, MPI_INT, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
+void master_send_job(int dest, int num_index) {
+  my_log("Sending job %d to %d", num_index, dest);
+  MPI_Send(&num_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
+  MPI_Send(numbers + num_index, TOTAL_NUMBERS, MPI_UNSIGNED_LONG, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
   // TODO: CHECK FOR ERRORS!
 }
 
@@ -84,7 +101,7 @@ int master_receive_result() {
   MPI_Recv(&index, 1, MPI_INT, MPI_ANY_SOURCE, TAG_RESULT_INDEX, MPI_COMM_WORLD, &status);
   source = status.MPI_SOURCE;
 
-  MPI_Recv(&result, 1, MPI_INT, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
+  MPI_Recv(numbers + index, TOTAL_NUMBERS, MPI_INT, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
   my_log("Received %d from %d related to job %d", result, source, index);
 
   return source;
