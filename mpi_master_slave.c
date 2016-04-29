@@ -11,24 +11,28 @@
 #define TAG_RESULT_PAYLOAD 4
 #define TAG_DIE            5
 
-#define TOTAL_ARRAYS  1000
-#define TOTAL_NUMBERS 100000
+#define TOTAL_ARRAYS  10
+#define TOTAL_NUMBERS 10
+#define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
-#define T_NUMBER unsigned long int
+#define T_NUMBER int
 
 int myrank;
 
 void master();
 void slave();
-void master_send_job(int dest, int num_index);
+void master_send_job(T_NUMBER **numbers, int job_index, int dest);
 int master_receive_result();
 void slave_receive_job();
 void slave_send_result();
+
+void debug_all_numbers(T_NUMBER **numbers);
+void debug_numbers(T_NUMBER *numbers);
 void my_log(char *fmt, ...);
 
-int cmpfunc (const void * a, const void * b);
+int cmpfunc(const void * a, const void * b);
 
-void main(int argc, char **argv) {
+int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
@@ -37,101 +41,133 @@ void main(int argc, char **argv) {
   } else {
     slave();
   }
+  my_log("FINALIZING");
   MPI_Finalize();
+  my_log("FINALIZed");
+  return 0;
 }
 
 void master() {
-  T_NUMBER** numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBER *));
-  if (numbers == NULL) {
-    fprintf(stderr, "calloc failed\n");
-    return(-1);
-  }
+  int ntasks, rank, i, n;
 
-  printf("Preparing arrays...");
+  T_NUMBER** numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBER *));
+  if (numbers == NULL) { fprintf(stderr, "calloc failed\n"); return; }
+
+  printf("Preparing arrays...\n");
   for (i = 0; i < TOTAL_ARRAYS; i++) {
     numbers[i] = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
-    if (numbers[i] == NULL) {
-      fprintf(stderr, "calloc failed\n");
-      return(-1);
-    }
+    if (numbers[i] == NULL) { fprintf(stderr, "calloc failed\n"); return; }
 
-    for (n = TOTAL_NUMBERS; n > 0; n--)
-      numbers[i][TOTAL_NUMBERS-n-1] = n;
+    for (n = 0; n < TOTAL_NUMBERS; n++)
+      numbers[i][n] = MAX_NUMBER - i * TOTAL_NUMBERS - n;
   }
   printf("DONE\n");
 
-  int        ntasks, rank, njobs, i;
-  int*       work;
+  debug_all_numbers(numbers);
 
   MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 
   my_log("Seeding slaves");
   for (rank = 1; rank < ntasks; ++rank) {
-    master_send_job(rank, rank - 1);
+    master_send_job(numbers, rank - 1, rank);
   }
 
   my_log("Sending remaining jobs");
-  for (i = ntasks-1; i < njobs; i++) {
-    int source = master_receive_result();
-    master_send_job(source, i);
+  for (i = ntasks-1; i < TOTAL_ARRAYS; i++) {
+    int source = master_receive_result(numbers);
+    master_send_job(numbers, i, source);
   }
 
   my_log("Done sending jobs, waiting to be completed");
 
   for (rank = 1; rank < ntasks; ++rank)
-    master_receive_result();
+    master_receive_result(numbers);
 
   my_log("Killing slaves");
   for (rank = 1; rank < ntasks; ++rank) {
-    MPI_Send(0, 0, MPI_INT, rank, TAG_DIE, MPI_COMM_WORLD);
+    MPI_Send(&rank, 1, MPI_INT, rank, TAG_DIE, MPI_COMM_WORLD);
   }
+  my_log("DONE");
+
+  debug_all_numbers(numbers);
 }
 
-void master_send_job(int dest, int num_index) {
-  my_log("Sending job %d to %d", num_index, dest);
-  MPI_Send(&num_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
-  MPI_Send(numbers + num_index, TOTAL_NUMBERS, MPI_UNSIGNED_LONG, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
-  // TODO: CHECK FOR ERRORS!
+void master_send_job(T_NUMBER **numbers, int job_index, int dest) {
+  my_log("Sending job %d to %d", job_index, dest);
+  MPI_Send(&job_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
+
+  T_NUMBER *payload = numbers[job_index];
+  MPI_Send(payload, TOTAL_NUMBERS, MPI_INT, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
 }
 
-int master_receive_result() {
+int master_receive_result(T_NUMBER **numbers) {
   MPI_Status status;
-  int index, result, source;
+  int job_index, source;
 
-  MPI_Recv(&index, 1, MPI_INT, MPI_ANY_SOURCE, TAG_RESULT_INDEX, MPI_COMM_WORLD, &status);
+  my_log("RECV");
+  MPI_Recv(&job_index, 1, MPI_INT, MPI_ANY_SOURCE, TAG_RESULT_INDEX, MPI_COMM_WORLD, &status);
   source = status.MPI_SOURCE;
 
-  MPI_Recv(numbers + index, TOTAL_NUMBERS, MPI_INT, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
-  my_log("Received %d from %d related to job %d", result, source, index);
+  T_NUMBER *result = numbers[job_index];
+  MPI_Recv(result, TOTAL_NUMBERS, MPI_INT, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
+  my_log("Received from %d the payload of %d", source, job_index);
 
   return source;
 }
 
 void slave() {
   MPI_Status status;
-  int work, result, index;
+  int job_index;
+  T_NUMBER *payload = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
 
   srand(getpid());
 
   for (;;) {
-    MPI_Recv(&index, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Recv(&job_index, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == TAG_DIE) {
       my_log("Exiting");
-      return;
+      break;
     }
     // Tag should be TAG_JOB_INDEX at this point
-    MPI_Recv(&work, 1, MPI_INT, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
-    my_log("Processing %d...", work);
-    sleep(rand() % 2);
-    result = work * 10 * myrank;
-    my_log("Begin sending back result for %d...", index);
-    MPI_Send(&index, 1, MPI_INT, MASTER, TAG_RESULT_INDEX, MPI_COMM_WORLD);
-    my_log("Sending %d to master...", result, index);
-    MPI_Send(&result, 1, MPI_INT, MASTER, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD);
+    MPI_Recv(payload, TOTAL_NUMBERS*2, MPI_INT, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
+
+    // my_log("BEFORE");
+    // debug_numbers(payload);
+    qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
+    // my_log("AFTER");
+    // debug_numbers(payload);
+
+    my_log("Begin sending back result for job %d...", job_index);
+    MPI_Send(&job_index, 1, MPI_INT, MASTER, TAG_RESULT_INDEX, MPI_COMM_WORLD);
+    MPI_Send(payload, TOTAL_NUMBERS, MPI_INT, MASTER, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD);
     my_log("DONE");
   }
 }
 
+void debug_all_numbers(T_NUMBER **numbers) {
+  int i;
+  printf("First 5 arrays:\n");
+  for (i = 0; i < 5; i++) {
+    debug_numbers(numbers[i]);
+  }
+  printf(" ...\n");
+  for (i = TOTAL_ARRAYS - 5; i < TOTAL_ARRAYS; i++) {
+    debug_numbers(numbers[i]);
+  }
+}
+
+void debug_numbers(T_NUMBER* numbers) {
+  int n;
+  printf("[%d] [ ", myrank);
+  for (n = 0; n < 3; n++) {
+    printf("%07d ", numbers[n]);
+  }
+  printf(" ... ");
+  for (n = TOTAL_NUMBERS - 3; n < TOTAL_NUMBERS; n++) {
+    printf("%07d ", numbers[n]);
+  }
+  printf("]\n");
+}
 
 void my_log(char *fmt, ...) {
   va_list printfargs;
@@ -142,4 +178,8 @@ void my_log(char *fmt, ...) {
   va_end(printfargs);
 
   printf("\n");
+}
+
+int cmpfunc (const void * a, const void * b) {
+  return ( *(T_NUMBER*)a - *(T_NUMBER*)b );
 }
