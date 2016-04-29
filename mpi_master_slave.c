@@ -11,8 +11,8 @@
 #define TAG_RESULT_PAYLOAD 4
 #define TAG_DIE            5
 
-#define TOTAL_ARRAYS  10
-#define TOTAL_NUMBERS 10
+#define TOTAL_ARRAYS  1000
+#define TOTAL_NUMBERS 100000
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
 #define T_NUMBER int
@@ -93,24 +93,21 @@ void master() {
 }
 
 void master_send_job(T_NUMBER **numbers, int job_index, int dest) {
-  my_log("Sending job %d to %d", job_index, dest);
-  MPI_Send(&job_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
-
   T_NUMBER *payload = numbers[job_index];
+
+  MPI_Send(&job_index, 1, MPI_INT, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
   MPI_Send(payload, TOTAL_NUMBERS, MPI_INT, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
 }
 
 int master_receive_result(T_NUMBER **numbers) {
   MPI_Status status;
-  int job_index, source;
 
-  my_log("RECV");
+  int job_index;
   MPI_Recv(&job_index, 1, MPI_INT, MPI_ANY_SOURCE, TAG_RESULT_INDEX, MPI_COMM_WORLD, &status);
-  source = status.MPI_SOURCE;
 
+  int source = status.MPI_SOURCE;
   T_NUMBER *result = numbers[job_index];
   MPI_Recv(result, TOTAL_NUMBERS, MPI_INT, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
-  my_log("Received from %d the payload of %d", source, job_index);
 
   return source;
 }
@@ -120,27 +117,18 @@ void slave() {
   int job_index;
   T_NUMBER *payload = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
 
-  srand(getpid());
-
   for (;;) {
     MPI_Recv(&job_index, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    if (status.MPI_TAG == TAG_DIE) {
-      my_log("Exiting");
-      break;
-    }
+    if (status.MPI_TAG == TAG_DIE) { break; }
+
     // Tag should be TAG_JOB_INDEX at this point
     MPI_Recv(payload, TOTAL_NUMBERS*2, MPI_INT, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
-
-    // my_log("BEFORE");
-    // debug_numbers(payload);
     qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
-    // my_log("AFTER");
-    // debug_numbers(payload);
 
-    my_log("Begin sending back result for job %d...", job_index);
+    // my_log("Begin sending back result for job %d...", job_index);
     MPI_Send(&job_index, 1, MPI_INT, MASTER, TAG_RESULT_INDEX, MPI_COMM_WORLD);
     MPI_Send(payload, TOTAL_NUMBERS, MPI_INT, MASTER, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD);
-    my_log("DONE");
+    // my_log("DONE");
   }
 }
 

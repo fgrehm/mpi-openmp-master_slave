@@ -2,22 +2,21 @@
 #include <stdlib.h>
 
 #define TOTAL_ARRAYS  1000
-#define TOTAL_NUMBERS 1000000
+#define TOTAL_NUMBERS 100000
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
-#define T_NUMBERS     int
+#define T_NUMBER     int
 
-T_NUMBERS i, n;
-int cmpfunc (const void * a, const void * b);
-void debug_all_numbers(T_NUMBERS **numbers);
-void debug_numbers(T_NUMBERS* numbers);
+T_NUMBER i, n;
+int cmpfunc(const void * a, const void * b);
+void debug_all_numbers(T_NUMBER **numbers);
+void debug_numbers(T_NUMBER* numbers);
 
 int main() {
-  T_NUMBERS **numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBERS *));
+  T_NUMBER **numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBER *));
   printf("Preparing arrays...\n");
   for (i = 0; i < TOTAL_ARRAYS; i++) {
-    if (i % 100 == 0) printf("Processed %d\n", i);
-    numbers[i] = (T_NUMBERS *)calloc(TOTAL_NUMBERS, sizeof(T_NUMBERS));
-    for (n = TOTAL_NUMBERS-1; n >= 0; n--)
+    numbers[i] = (T_NUMBER *)calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
+    for (n = 0; n < TOTAL_NUMBERS; n++)
       numbers[i][n] = MAX_NUMBER - i * TOTAL_NUMBERS - n;
   }
   printf("DONE\n");
@@ -26,15 +25,14 @@ int main() {
 
   printf("Sorting arrays...\n");
   for (i = 0; i < TOTAL_ARRAYS; i++) {
-    if (i % 100 == 0) printf("Processed %d\n", i);
-    qsort(numbers[i], TOTAL_NUMBERS, sizeof(T_NUMBERS), cmpfunc);
+    qsort(numbers[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
   }
   printf("Done sorting\n");
 
   debug_all_numbers(numbers);
 }
 
-void debug_all_numbers(T_NUMBERS **numbers) {
+void debug_all_numbers(T_NUMBER **numbers) {
   printf("First 5 arrays:\n");
   for (i = 0; i < 5; i++) {
     debug_numbers(numbers[i]);
@@ -45,7 +43,7 @@ void debug_all_numbers(T_NUMBERS **numbers) {
   }
 }
 
-void debug_numbers(T_NUMBERS* numbers) {
+void debug_numbers(T_NUMBER* numbers) {
   printf("  [ ");
   for (n = 0; n < 3; n++) {
     printf("%07d ", numbers[n]);
@@ -58,5 +56,5 @@ void debug_numbers(T_NUMBERS* numbers) {
 }
 
 int cmpfunc (const void * a, const void * b) {
-  return ( *(T_NUMBERS*)a - *(T_NUMBERS*)b );
+  return ( *(T_NUMBER*)a - *(T_NUMBER*)b );
 }
