@@ -12,7 +12,7 @@
 #define TAG_DIE            5
 
 #define TOTAL_ARRAYS  1000
-#define TOTAL_NUMBERS 100000
+#define TOTAL_NUMBERS 1000000
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
 #define T_NUMBER int
