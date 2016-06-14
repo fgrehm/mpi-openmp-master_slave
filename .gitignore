@@ -32,4 +32,3 @@
 *.dSYM/
 
 mpi_master_slave
-single_process

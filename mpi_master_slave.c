@@ -11,8 +11,8 @@
 #define TAG_RESULT_PAYLOAD 4
 #define TAG_DIE            5
 
-#define TOTAL_ARRAYS  1000
-#define TOTAL_NUMBERS 1000000
+#define TOTAL_ARRAYS  100
+#define TOTAL_NUMBERS 1000
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
 #define T_NUMBER int
@@ -41,9 +41,7 @@ int main(int argc, char **argv) {
   } else {
     slave();
   }
-  my_log("FINALIZING");
   MPI_Finalize();
-  my_log("FINALIZed");
   return 0;
 }
 
@@ -125,10 +123,8 @@ void slave() {
     MPI_Recv(payload, TOTAL_NUMBERS*2, MPI_INT, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
     qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
 
-    // my_log("Begin sending back result for job %d...", job_index);
     MPI_Send(&job_index, 1, MPI_INT, MASTER, TAG_RESULT_INDEX, MPI_COMM_WORLD);
     MPI_Send(payload, TOTAL_NUMBERS, MPI_INT, MASTER, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD);
-    // my_log("DONE");
   }
 }
 
