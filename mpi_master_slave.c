@@ -13,6 +13,7 @@
 
 #define T_NUMBER int
 #define T_MPI_TYPE MPI_INT
+#define PAYLOAD_SIZE 1
 
 int myrank;
 
@@ -68,9 +69,9 @@ void master() {
   }
 
   my_log("Sending remaining jobs");
-  for (i = ntasks-1; i < TOTAL_ARRAYS; i++) {
+  for (i = ntasks-1; i < TOTAL_ARRAYS/PAYLOAD_SIZE; i++) {
     int source = master_receive_result(numbers);
-    master_send_job(numbers, i, source);
+    master_send_job(numbers, i*PAYLOAD_SIZE, source);
   }
 
   my_log("Done sending jobs, waiting to be completed");
@@ -88,9 +89,7 @@ void master() {
 }
 
 void master_send_job(T_NUMBER **numbers, int job_index, int dest) {
-  T_NUMBER *payload = numbers[job_index];
-
-  MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, dest, job_index, MPI_COMM_WORLD);
+  MPI_Send(&(numbers[job_index][0]), TOTAL_NUMBERS, T_MPI_TYPE, dest, job_index, MPI_COMM_WORLD);
 }
 
 int master_receive_result(T_NUMBER **numbers) {
@@ -101,15 +100,22 @@ int master_receive_result(T_NUMBER **numbers) {
   int source = status.MPI_SOURCE;
 
   T_NUMBER *result = numbers[job_index];
-  MPI_Recv(result, TOTAL_NUMBERS, T_MPI_TYPE, source, job_index, MPI_COMM_WORLD, &status);
+  MPI_Recv(&(numbers[job_index][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, source, job_index, MPI_COMM_WORLD, &status);
 
   return source;
 }
 
 void slave() {
   MPI_Status status;
-  int job_index;
-  T_NUMBER *payload = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
+  int job_index, i;
+
+  T_NUMBER** payload = calloc(PAYLOAD_SIZE, sizeof(T_NUMBER *));
+  if (payload == NULL) { fprintf(stderr, "calloc failed\n"); return; }
+
+  for (i = 0; i < PAYLOAD_SIZE; i++) {
+    payload[i] = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
+    if (payload[i] == NULL) { fprintf(stderr, "calloc failed\n"); return; }
+  }
 
   for (;;) {
     MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -117,10 +123,12 @@ void slave() {
 
     job_index = status.MPI_TAG;
 
-    MPI_Recv(payload, TOTAL_NUMBERS, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
-    qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
+    MPI_Recv(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
+    for (i = 0; i < PAYLOAD_SIZE; i++) {
+      qsort(payload[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
+    }
 
-    MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
+    MPI_Send(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
   }
 }
 
