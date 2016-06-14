@@ -9,11 +9,7 @@
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
 #define MASTER 0
-#define TAG_JOB_INDEX      1
-#define TAG_JOB_PAYLOAD    2
-#define TAG_RESULT_INDEX   3
-#define TAG_RESULT_PAYLOAD 4
-#define TAG_DIE            TOTAL_ARRAYS + 1
+#define TAG_DIE TOTAL_ARRAYS + 1
 
 #define T_NUMBER int
 #define T_MPI_TYPE MPI_INT
@@ -94,19 +90,18 @@ void master() {
 void master_send_job(T_NUMBER **numbers, int job_index, int dest) {
   T_NUMBER *payload = numbers[job_index];
 
-  MPI_Send(&job_index, 1, T_MPI_TYPE, dest, TAG_JOB_INDEX, MPI_COMM_WORLD);
-  MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, dest, TAG_JOB_PAYLOAD, MPI_COMM_WORLD);
+  MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, dest, job_index, MPI_COMM_WORLD);
 }
 
 int master_receive_result(T_NUMBER **numbers) {
   MPI_Status status;
 
-  int job_index;
-  MPI_Recv(&job_index, 1, T_MPI_TYPE, MPI_ANY_SOURCE, TAG_RESULT_INDEX, MPI_COMM_WORLD, &status);
-
+  MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+  int job_index = status.MPI_TAG;
   int source = status.MPI_SOURCE;
+
   T_NUMBER *result = numbers[job_index];
-  MPI_Recv(result, TOTAL_NUMBERS, T_MPI_TYPE, source, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD, &status);
+  MPI_Recv(result, TOTAL_NUMBERS, T_MPI_TYPE, source, job_index, MPI_COMM_WORLD, &status);
 
   return source;
 }
@@ -120,13 +115,12 @@ void slave() {
     MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == TAG_DIE) { break; }
 
-    MPI_Recv(&job_index, 1, T_MPI_TYPE, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    job_index = status.MPI_TAG;
 
-    MPI_Recv(payload, TOTAL_NUMBERS*2, T_MPI_TYPE, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
+    MPI_Recv(payload, TOTAL_NUMBERS, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
     qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
 
-    MPI_Send(&job_index, 1, T_MPI_TYPE, MASTER, TAG_RESULT_INDEX, MPI_COMM_WORLD);
-    MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, MASTER, TAG_RESULT_PAYLOAD, MPI_COMM_WORLD);
+    MPI_Send(payload, TOTAL_NUMBERS, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
   }
 }
 
