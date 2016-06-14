@@ -117,10 +117,11 @@ void slave() {
   T_NUMBER *payload = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
 
   for (;;) {
-    MPI_Recv(&job_index, 1, T_MPI_TYPE, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == TAG_DIE) { break; }
 
-    // Tag should be TAG_JOB_INDEX at this point
+    MPI_Recv(&job_index, 1, T_MPI_TYPE, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+
     MPI_Recv(payload, TOTAL_NUMBERS*2, T_MPI_TYPE, MASTER, TAG_JOB_PAYLOAD, MPI_COMM_WORLD, &status);
     qsort(payload, TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
 
