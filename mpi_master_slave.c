@@ -23,6 +23,7 @@ void master_send_job(T_NUMBER **numbers, int job_index, int dest);
 int master_receive_result();
 void slave_receive_job();
 void slave_send_result();
+T_NUMBER** alloc_contiguous_matrix(int rows, int columns);
 
 void debug_all_numbers(T_NUMBER **numbers);
 void debug_numbers(T_NUMBER *numbers);
@@ -46,14 +47,9 @@ int main(int argc, char **argv) {
 void master() {
   int ntasks, rank, i, n;
 
-  T_NUMBER** numbers = calloc(TOTAL_ARRAYS, sizeof(T_NUMBER *));
-  if (numbers == NULL) { fprintf(stderr, "calloc failed\n"); return; }
-
   printf("Preparing arrays...\n");
+  T_NUMBER** numbers = alloc_contiguous_matrix(TOTAL_ARRAYS, TOTAL_NUMBERS);
   for (i = 0; i < TOTAL_ARRAYS; i++) {
-    numbers[i] = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
-    if (numbers[i] == NULL) { fprintf(stderr, "calloc failed\n"); return; }
-
     for (n = 0; n < TOTAL_NUMBERS; n++)
       numbers[i][n] = MAX_NUMBER - i * TOTAL_NUMBERS - n;
   }
@@ -65,7 +61,7 @@ void master() {
 
   my_log("Seeding slaves");
   for (rank = 1; rank < ntasks; ++rank) {
-    master_send_job(numbers, rank - 1, rank);
+    master_send_job(numbers, (rank - 1)*PAYLOAD_SIZE, rank);
   }
 
   my_log("Sending remaining jobs");
@@ -89,7 +85,7 @@ void master() {
 }
 
 void master_send_job(T_NUMBER **numbers, int job_index, int dest) {
-  MPI_Send(&(numbers[job_index][0]), TOTAL_NUMBERS, T_MPI_TYPE, dest, job_index, MPI_COMM_WORLD);
+  MPI_Send(&(numbers[job_index][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, dest, job_index, MPI_COMM_WORLD);
 }
 
 int master_receive_result(T_NUMBER **numbers) {
@@ -99,7 +95,6 @@ int master_receive_result(T_NUMBER **numbers) {
   int job_index = status.MPI_TAG;
   int source = status.MPI_SOURCE;
 
-  T_NUMBER *result = numbers[job_index];
   MPI_Recv(&(numbers[job_index][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, source, job_index, MPI_COMM_WORLD, &status);
 
   return source;
@@ -109,13 +104,8 @@ void slave() {
   MPI_Status status;
   int job_index, i;
 
-  T_NUMBER** payload = calloc(PAYLOAD_SIZE, sizeof(T_NUMBER *));
+  T_NUMBER** payload = alloc_contiguous_matrix(PAYLOAD_SIZE, TOTAL_NUMBERS);
   if (payload == NULL) { fprintf(stderr, "calloc failed\n"); return; }
-
-  for (i = 0; i < PAYLOAD_SIZE; i++) {
-    payload[i] = calloc(TOTAL_NUMBERS, sizeof(T_NUMBER));
-    if (payload[i] == NULL) { fprintf(stderr, "calloc failed\n"); return; }
-  }
 
   for (;;) {
     MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -130,6 +120,24 @@ void slave() {
 
     MPI_Send(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
   }
+}
+
+int cmpfunc (const void * a, const void * b) {
+  return ( *(T_NUMBER*)a - *(T_NUMBER*)b );
+}
+
+T_NUMBER** alloc_contiguous_matrix(int rows, int columns) {
+  int i;
+
+  T_NUMBER** matrix = calloc(rows, sizeof(T_NUMBER *));
+  if (matrix == NULL) { fprintf(stderr, "calloc failed\n"); return NULL; }
+
+  for (i = 0; i < rows; i++) {
+    matrix[i] = calloc(columns, sizeof(T_NUMBER));
+    if (matrix[i] == NULL) { fprintf(stderr, "calloc failed\n"); return NULL; }
+  }
+
+  return matrix;
 }
 
 void debug_all_numbers(T_NUMBER **numbers) {
@@ -166,8 +174,4 @@ void my_log(char *fmt, ...) {
   va_end(printfargs);
 
   printf("\n");
-}
-
-int cmpfunc (const void * a, const void * b) {
-  return ( *(T_NUMBER*)a - *(T_NUMBER*)b );
 }
