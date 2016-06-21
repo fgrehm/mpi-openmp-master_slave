@@ -10,6 +10,7 @@
 
 #define MASTER 0
 #define TAG_DIE TOTAL_ARRAYS + 1
+#define NUM_THREADS 8
 
 #define T_NUMBER int
 #define T_MPI_TYPE MPI_INT
@@ -107,13 +108,15 @@ void slave() {
   T_NUMBER** payload = alloc_contiguous_matrix(PAYLOAD_SIZE, TOTAL_NUMBERS);
   if (payload == NULL) { fprintf(stderr, "calloc failed\n"); return; }
 
-  omp_set_num_threads(8);
+  omp_set_num_threads(NUM_THREADS);
 
   for (;;) {
     MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == TAG_DIE) { break; }
 
     job_index = status.MPI_TAG;
+
+    my_log("SORTING FROM %d TO %d", job_index, job_index+PAYLOAD_SIZE);
 
     MPI_Recv(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
     #pragma omp for
