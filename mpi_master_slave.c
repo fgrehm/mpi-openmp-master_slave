@@ -18,6 +18,7 @@
 
 int myrank;
 
+void bubble_sort(int *arr, int arr_size);
 void master();
 void slave();
 void master_send_job(T_NUMBER **numbers, int job_index, int dest);
@@ -121,7 +122,8 @@ void slave() {
     MPI_Recv(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
     #pragma omp for
     for (i = 0; i < PAYLOAD_SIZE; i++)
-      qsort(payload[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
+      bubble_sort(payload[i], TOTAL_NUMBERS);
+      // qsort(payload[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
 
     MPI_Send(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
   }
@@ -144,6 +146,23 @@ T_NUMBER** alloc_contiguous_matrix(int rows, int columns) {
     matrix[i] = &(data[i*columns]);
 
   return matrix;
+}
+
+void bubble_sort(T_NUMBER *arr, T_NUMBER arr_size) {
+  int i = 0, j, aux, replaced = 1;
+
+  while (i < (arr_size - 1) && replaced) {
+    replaced = 0;
+    for (j = 0 ; j < arr_size - i - 1; j++) {
+      if (arr[j] > arr[j+1]) {
+        aux      = arr[j];
+        arr[j]   = arr[j+1];
+        arr[j+1] = aux;
+        replaced = 1;
+      }
+    }
+    i++;
+  }
 }
 
 void debug_all_numbers(T_NUMBER **numbers) {
