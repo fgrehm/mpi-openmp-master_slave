@@ -120,7 +120,7 @@ void slave() {
     my_log("SORTING FROM %d TO %d", job_index, job_index+PAYLOAD_SIZE);
 
     MPI_Recv(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
-    #pragma omp for
+    #pragma omp parallel for
     for (i = 0; i < PAYLOAD_SIZE; i++)
       bubble_sort(payload[i], TOTAL_NUMBERS);
       // qsort(payload[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
