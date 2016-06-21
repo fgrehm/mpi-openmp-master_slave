@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include "mpi.h"
 
-#define TOTAL_ARRAYS  100
-#define TOTAL_NUMBERS 1000
+#define TOTAL_ARRAYS  10000
+#define TOTAL_NUMBERS 100000
 #define MAX_NUMBER    TOTAL_ARRAYS * TOTAL_NUMBERS
 
 #define MASTER 0
@@ -13,7 +13,7 @@
 
 #define T_NUMBER int
 #define T_MPI_TYPE MPI_INT
-#define PAYLOAD_SIZE 1
+#define PAYLOAD_SIZE 8
 
 int myrank;
 
@@ -107,6 +107,8 @@ void slave() {
   T_NUMBER** payload = alloc_contiguous_matrix(PAYLOAD_SIZE, TOTAL_NUMBERS);
   if (payload == NULL) { fprintf(stderr, "calloc failed\n"); return; }
 
+  omp_set_num_threads(8);
+
   for (;;) {
     MPI_Probe(MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
     if (status.MPI_TAG == TAG_DIE) { break; }
@@ -114,9 +116,9 @@ void slave() {
     job_index = status.MPI_TAG;
 
     MPI_Recv(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD, &status);
-    for (i = 0; i < PAYLOAD_SIZE; i++) {
+    #pragma omp for
+    for (i = 0; i < PAYLOAD_SIZE; i++)
       qsort(payload[i], TOTAL_NUMBERS, sizeof(T_NUMBER), cmpfunc);
-    }
 
     MPI_Send(&(payload[0][0]), TOTAL_NUMBERS*PAYLOAD_SIZE, T_MPI_TYPE, MASTER, job_index, MPI_COMM_WORLD);
   }
@@ -129,13 +131,14 @@ int cmpfunc (const void * a, const void * b) {
 T_NUMBER** alloc_contiguous_matrix(int rows, int columns) {
   int i;
 
+  T_NUMBER* data = calloc(rows*columns, sizeof(T_NUMBER));
+  if (data == NULL) { fprintf(stderr, "calloc failed\n"); return NULL; }
+
   T_NUMBER** matrix = calloc(rows, sizeof(T_NUMBER *));
   if (matrix == NULL) { fprintf(stderr, "calloc failed\n"); return NULL; }
 
-  for (i = 0; i < rows; i++) {
-    matrix[i] = calloc(columns, sizeof(T_NUMBER));
-    if (matrix[i] == NULL) { fprintf(stderr, "calloc failed\n"); return NULL; }
-  }
+  for (i = 0; i < rows; i++)
+    matrix[i] = &(data[i*columns]);
 
   return matrix;
 }
